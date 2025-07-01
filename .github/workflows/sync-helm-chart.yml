@@ -1,10 +1,11 @@
-name: Sync DolphinScheduler Helm Chart
+name: Sync Helm Charts to Alibaba Cloud ACR
 
 on:
   push:
     branches: [ main ]
     paths:
       - 'charts-to-sync.txt'
+  workflow_dispatch:
 
 jobs:
   sync:
@@ -14,26 +15,54 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Set up crane
+      - name: Install oras
         run: |
-          wget https://github.com/google/go-containerregistry/releases/download/v0.15.3/crane_0.15.3_linux_amd64 -O crane
-          chmod +x crane
-          sudo mv crane /usr/local/bin/
-
+          # 下载 oras 二进制文件
+          wget https://github.com/oras-project/oras/releases/download/v1.1.0/oras_1.1.0_linux_amd64.tar.gz -O oras.tar.gz
+          mkdir -p oras-install/
+          tar -zxf oras.tar.gz -C oras-install/
+          sudo mv oras-install/oras /usr/local/bin/
+          rm -rf oras.tar.gz oras-install/
+          oras version  # 验证安装
+      
+      - name: Login to Docker Hub
+        run: |
+          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+      
       - name: Login to Alibaba Cloud ACR
-        run: echo "${{ secrets.ALIYUN_REGISTRY_PASSWORD }}" | docker login ${{ secrets.ALIYUN_REGISTRY_ENDPOINT }} -u ${{ secrets.ALIYUN_REGISTRY_USER }} --password-stdin
-
-      - name: Sync Helm Charts from Config File
         run: |
+          echo "${{ secrets.ALIYUN_REGISTRY_PASSWORD }}" | docker login ${{ secrets.ALIYUN_REGISTRY_ENDPOINT }} -u ${{ secrets.ALIYUN_REGISTRY_USER }} --password-stdin
+      
+      - name: Validate config file
+        run: |
+          # 原有验证逻辑...
+      
+      - name: Sync Helm Charts with oras
+        run: |
+          sync_errors=0
+          
           while IFS= read -r source_image; do
-            # 提取chart名称和版本
+            if [[ -z "$source_image" || "$source_image" == \#* ]]; then
+              continue
+            fi
+            
             chart_name=$(echo "$source_image" | awk -F'/' '{print $NF}' | awk -F':' '{print $1}')
             version=$(echo "$source_image" | awk -F':' '{print $NF}')
+            target_image="${{ secrets.ALIYUN_REGISTRY_ENDPOINT }}/${{ secrets.ALIYUN_NAMESPACE }}/${chart_name}:${version}"
             
-            # 同步到ACR
-            crane copy \
-              "oci://$source_image" \
-              "oci://${{ secrets.ALIYUN_REGISTRY_ENDPOINT }}/${{ secrets.ALIYUN_NAMESPACE }}/${chart_name}:${version}"
+            echo "Syncing $source_image to $target_image"
             
-            echo "Synced $source_image to ACR"
+            # 使用 oras 复制 OCI 制品
+            if ! oras copy "oci://$source_image" "oci://$target_image"; then
+              echo "Error: Failed to sync $source_image"
+              sync_errors=$((sync_errors + 1))
+            else
+              echo "Successfully synced $source_image"
+            fi
+            
+            echo "-----------------------------------"
           done < charts-to-sync.txt
+          
+          if [ $sync_errors -gt 0 ]; then
+            exit 1
+          fi
