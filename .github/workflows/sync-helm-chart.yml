@@ -17,15 +17,15 @@ jobs:
       
       - name: Install oras
         run: |
+          # 下载 oras 二进制文件
           wget https://github.com/oras-project/oras/releases/download/v1.1.0/oras_1.1.0_linux_amd64.tar.gz -O oras.tar.gz
           mkdir -p oras-install/
           tar -zxf oras.tar.gz -C oras-install/
           sudo mv oras-install/oras /usr/local/bin/
           rm -rf oras.tar.gz oras-install/
-          oras version
+          oras version  # 验证安装
       
       - name: Login to Docker Hub
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_PASSWORD != '' }}
         run: |
           echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
       
@@ -40,16 +40,19 @@ jobs:
             exit 1
           fi
           
+          # 检查文件是否为空
           if [ ! -s "charts-to-sync.txt" ]; then
             echo "Error: charts-to-sync.txt is empty!"
             exit 1
           fi
           
+          # 验证文件格式 (简单检查)
           while IFS= read -r line; do
             if [[ -z "$line" || "$line" == \#* ]]; then
-              continue
+              continue  # 跳过空行和注释
             fi
             
+            # 检查格式是否为 registry/chart:version
             if ! echo "$line" | grep -qE '^[^/]+/[^/]+/[^:]+:[^:]+$'; then
               echo "Error: Invalid format in charts-to-sync.txt: $line"
               echo "Expected format: registry/namespace/chart:version"
@@ -58,7 +61,7 @@ jobs:
           done < charts-to-sync.txt
           
           echo "Config file validation passed"
-      
+          
       - name: Sync Helm Charts with oras
         run: |
           sync_errors=0
@@ -70,8 +73,6 @@ jobs:
             
             chart_name=$(echo "$source_image" | awk -F'/' '{print $NF}' | awk -F':' '{print $1}')
             version=$(echo "$source_image" | awk -F':' '{print $NF}')
-            
-            # 修复：构建完整的目标地址
             target_image="${{ secrets.ALIYUN_REGISTRY_ENDPOINT }}/${{ secrets.ALIYUN_NAMESPACE }}/${chart_name}:${version}"
             
             echo "Syncing $source_image to $target_image"
