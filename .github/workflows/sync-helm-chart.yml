@@ -60,9 +60,6 @@ jobs:
           echo "Config file validation passed"
       
       - name: Sync Helm Charts with oras
-        env:
-            ALIYUN_REGISTRY_ENDPOINT: ${{ secrets.ALIYUN_REGISTRY_ENDPOINT }}
-            ALIYUN_NAMESPACE: ${{ secrets.ALIYUN_NAMESPACE }}
         run: |
           sync_errors=0
           
@@ -78,12 +75,12 @@ jobs:
             version=$(echo "$source_image" | awk -F':' '{print $NF}')
             
             # 构建目标镜像地址
-            target_image="${ALIYUN_REGISTRY_ENDPOINT}/${ALIYUN_NAMESPACE}/${chart_name}:${version}"
+            target_image="registry.cn-hangzhou.aliyuncs.com/sunbox_gz/${chart_name}:${version}"
             
             echo "Syncing oci://${source_image} to oci://${target_image}"
             
             # 使用 oras 复制
-            if ! oras copy "oci://${source_image}" "oci://${secrets.ALIYUN_REGISTRY_ENDPOINT}/${secrets.ALIYUN_NAMESPACE}/${chart_name}:${version}"; then
+            if ! oras copy "oci://${source_image}" "oci://${target_image}"; then
               echo "Error: Failed to sync ${source_image}"
               sync_errors=$((sync_errors + 1))
             else
