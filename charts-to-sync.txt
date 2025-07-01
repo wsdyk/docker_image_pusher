@@ -1,1 +1,1 @@
-registry-1.docker.io/apache/dolphinscheduler-helm:3.2.1
+docker.io/apache/dolphinscheduler-helm:3.2.1
