@@ -59,28 +59,12 @@ jobs:
           
           echo "Config file validation passed"
       
-      - name: Debug info
-        run: |
-          echo "ALIYUN_REGISTRY_ENDPOINT: ${{ secrets.ALIYUN_REGISTRY_ENDPOINT }}"
-          echo "ALIYUN_NAMESPACE: ${{ secrets.ALIYUN_NAMESPACE }}"
-          echo "First image in list:"
-          head -1 charts-to-sync.txt
-      
       - name: Sync Helm Charts with oras
         env:
             ALIYUN_REGISTRY_ENDPOINT: ${{ secrets.ALIYUN_REGISTRY_ENDPOINT }}
             ALIYUN_NAMESPACE: ${{ secrets.ALIYUN_NAMESPACE }}
         run: |
           sync_errors=0
-
-          # 验证环境变量是否设置
-          if [ -z "$ALIYUN_REGISTRY_ENDPOINT" ] || [ -z "$ALIYUN_NAMESPACE" ]; then
-            echo "错误：阿里云 registry 配置未设置！"
-            echo "请检查以下 secrets 是否配置："
-            echo "ALIYUN_REGISTRY_ENDPOINT: $ALIYUN_REGISTRY_ENDPOINT"
-            echo "ALIYUN_NAMESPACE: $ALIYUN_NAMESPACE"
-            exit 1
-          fi
           
           while IFS= read -r source_line; do
             if [[ -z "$source_line" || "$source_line" == \#* ]]; then
@@ -99,7 +83,7 @@ jobs:
             echo "Syncing oci://${source_image} to oci://${target_image}"
             
             # 使用 oras 复制
-            if ! oras copy "oci://${source_image}" "oci://${target_image}"; then
+            if ! oras copy "oci://${source_image}" "oci://${secrets.ALIYUN_REGISTRY_ENDPOINT}/${secrets.ALIYUN_NAMESPACE}/${chart_name}:${version}"; then
               echo "Error: Failed to sync ${source_image}"
               sync_errors=$((sync_errors + 1))
             else
