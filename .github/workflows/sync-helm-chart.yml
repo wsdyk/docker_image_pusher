@@ -25,10 +25,6 @@ jobs:
           rm -rf oras.tar.gz oras-install/
           oras version  # 验证安装
       
-      - name: Login to Docker Hub
-        run: |
-          echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
-      
       - name: Login to Alibaba Cloud ACR
         run: |
           echo "${{ secrets.ALIYUN_REGISTRY_PASSWORD }}" | docker login ${{ secrets.ALIYUN_REGISTRY_ENDPOINT }} -u ${{ secrets.ALIYUN_REGISTRY_USER }} --password-stdin
