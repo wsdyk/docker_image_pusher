@@ -25,15 +25,18 @@ jobs:
       
       - name: Login to Alibaba Cloud ACR
         run: echo "${{ secrets.ALIYUN_REGISTRY_PASSWORD }}" | docker login ${{ secrets.ALIYUN_REGISTRY_ENDPOINT }} -u ${{ secrets.ALIYUN_REGISTRY_USER }} --password-stdin
-      
-      - name: Sync Helm Chart
+
+      - name: Sync Helm Charts from Config File
         run: |
-          # 从Docker Hub拉取OCI格式的Helm Chart
-          crane copy \
-            oci://registry-1.docker.io/apache/dolphinscheduler-helm:3.1.0 \
-            oci://${{ secrets.ALIYUN_REGISTRY_ENDPOINT }}/${{ secrets.ALIYUN_NAMESPACE }}/dolphinscheduler-helm:3.1.0
-          
-          # 可添加更多Chart版本同步
-          crane copy \
-            oci://registry-1.docker.io/apache/dolphinscheduler-helm:3.0.0 \
-            oci://${{ secrets.ALIYUN_REGISTRY_ENDPOINT }}/${{ secrets.ALIYUN_NAMESPACE }}/dolphinscheduler-helm:3.0.0
+          while IFS= read -r source_image; do
+            # 提取chart名称和版本
+            chart_name=$(echo "$source_image" | awk -F'/' '{print $NF}' | awk -F':' '{print $1}')
+            version=$(echo "$source_image" | awk -F':' '{print $NF}')
+            
+            # 同步到ACR
+            crane copy \
+              "oci://$source_image" \
+              "oci://${{ secrets.ALIYUN_REGISTRY_ENDPOINT }}/${{ secrets.ALIYUN_NAMESPACE }}/${chart_name}:${version}"
+            
+            echo "Synced $source_image to ACR"
+          done < charts-to-sync.txt
