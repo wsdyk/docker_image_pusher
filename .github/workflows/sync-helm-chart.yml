@@ -17,15 +17,15 @@ jobs:
       
       - name: Install oras
         run: |
-          # 下载 oras 二进制文件
           wget https://github.com/oras-project/oras/releases/download/v1.1.0/oras_1.1.0_linux_amd64.tar.gz -O oras.tar.gz
           mkdir -p oras-install/
           tar -zxf oras.tar.gz -C oras-install/
           sudo mv oras-install/oras /usr/local/bin/
           rm -rf oras.tar.gz oras-install/
-          oras version  # 验证安装
-          
+          oras version
+      
       - name: Login to Docker Hub
+        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_PASSWORD != '' }}
         run: |
           echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
       
@@ -35,7 +35,29 @@ jobs:
       
       - name: Validate config file
         run: |
-          # 原有验证逻辑...
+          if [ ! -f "charts-to-sync.txt" ]; then
+            echo "Error: charts-to-sync.txt not found!"
+            exit 1
+          fi
+          
+          if [ ! -s "charts-to-sync.txt" ]; then
+            echo "Error: charts-to-sync.txt is empty!"
+            exit 1
+          fi
+          
+          while IFS= read -r line; do
+            if [[ -z "$line" || "$line" == \#* ]]; then
+              continue
+            fi
+            
+            if ! echo "$line" | grep -qE '^[^/]+/[^/]+/[^:]+:[^:]+$'; then
+              echo "Error: Invalid format in charts-to-sync.txt: $line"
+              echo "Expected format: registry/namespace/chart:version"
+              exit 1
+            fi
+          done < charts-to-sync.txt
+          
+          echo "Config file validation passed"
       
       - name: Sync Helm Charts with oras
         run: |
@@ -48,6 +70,8 @@ jobs:
             
             chart_name=$(echo "$source_image" | awk -F'/' '{print $NF}' | awk -F':' '{print $1}')
             version=$(echo "$source_image" | awk -F':' '{print $NF}')
+            
+            # 修复：构建完整的目标地址
             target_image="${{ secrets.ALIYUN_REGISTRY_ENDPOINT }}/${{ secrets.ALIYUN_NAMESPACE }}/${chart_name}:${version}"
             
             echo "Syncing $source_image to $target_image"
