@@ -1,0 +1,39 @@
+name: Sync DolphinScheduler Helm Chart
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * *'  # 每天凌晨自动同步
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Set up crane
+        run: |
+          wget https://github.com/google/go-containerregistry/releases/download/v0.15.2/crane_0.15.2_linux_amd64 -O crane
+          chmod +x crane
+          sudo mv crane /usr/local/bin/
+      
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+      
+      - name: Login to Alibaba Cloud ACR
+        run: echo "${{ secrets.ALIYUN_REGISTRY_PASSWORD }}" | docker login ${{ secrets.ALIYUN_REGISTRY_ENDPOINT }} -u ${{ secrets.ALIYUN_REGISTRY_USER }} --password-stdin
+      
+      - name: Sync Helm Chart
+        run: |
+          # 从Docker Hub拉取OCI格式的Helm Chart
+          crane copy \
+            oci://registry-1.docker.io/apache/dolphinscheduler-helm:3.1.0 \
+            oci://${{ secrets.ALIYUN_REGISTRY_ENDPOINT }}/${{ secrets.ALIYUN_NAMESPACE }}/dolphinscheduler-helm:3.1.0
+          
+          # 可添加更多Chart版本同步
+          crane copy \
+            oci://registry-1.docker.io/apache/dolphinscheduler-helm:3.0.0 \
+            oci://${{ secrets.ALIYUN_REGISTRY_ENDPOINT }}/${{ secrets.ALIYUN_NAMESPACE }}/dolphinscheduler-helm:3.0.0
